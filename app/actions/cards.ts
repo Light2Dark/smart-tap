@@ -2,80 +2,50 @@
 
 import { auth } from "@clerk/nextjs/server";
 import { revalidatePath } from "next/cache";
+import type { CardsDb } from "@/lib/card-api";
+import { supabaseCardsDb } from "@/lib/card-db";
 import {
   type CardActionState,
-  httpsUrl,
+  DESTINATION_ERROR,
   parseCardFields,
   parseCardId,
+  parseDestination,
 } from "@/lib/cards";
-import { createClient } from "@/utils/supabase/server";
-
-async function ownerId() {
-  const { userId } = await auth();
-  return userId;
-}
 
 export async function createCard(
   _prev: CardActionState,
   formData: FormData,
 ): Promise<CardActionState> {
-  const userId = await ownerId();
+  const { userId } = await auth();
   if (!userId) {
     return { error: "Sign in to add a card." };
   }
-
   const parsed = parseCardFields(formData);
   if ("error" in parsed) {
     return parsed;
   }
-
-  const supabase = createClient();
-  const { error } = await supabase.from("cards").insert({
-    user_id: userId,
-    title: parsed.title,
-    destination_url: parsed.destinationUrl,
+  return write("Could not add that card.", async (db) => {
+    await db.insert(userId, parsed.title, parsed.destinationUrl);
+    return true;
   });
-
-  if (error) {
-    return { error: "Could not add that card." };
-  }
-
-  revalidatePath("/");
-  return { ok: true };
 }
 
 export async function updateDestination(
   _prev: CardActionState,
   formData: FormData,
 ): Promise<CardActionState> {
-  const userId = await ownerId();
-  const id = parseCardId(formData);
-  const destinationUrl = httpsUrl(
-    String(formData.get("destination") ?? "").trim(),
-  );
-
+  const { userId } = await auth();
   if (!userId) {
     return { error: "Sign in to edit a card." };
   }
-  if (id === null || !destinationUrl) {
-    return { error: "The destination has to be an https link." };
+  const id = parseCardId(formData);
+  const parsed = parseDestination(String(formData.get("destination") ?? ""));
+  if (id === null || "error" in parsed) {
+    return { error: DESTINATION_ERROR };
   }
-
-  const supabase = createClient();
-  const { data, error } = await supabase
-    .from("cards")
-    .update({ destination_url: destinationUrl })
-    .eq("id", id)
-    .eq("user_id", userId)
-    .is("deleted_at", null)
-    .select("id");
-
-  if (error || !data?.length) {
-    return { error: "Could not update that destination." };
-  }
-
-  revalidatePath("/");
-  return { ok: true };
+  return write("Could not update that destination.", (db) =>
+    db.updateDestination(userId, id, parsed.destinationUrl),
+  );
 }
 
 export async function softDeleteCard(
@@ -85,7 +55,7 @@ export async function softDeleteCard(
   return setDeletedAt(
     formData,
     new Date().toISOString(),
-    "Could not move that card to trash.",
+    "Could not delete that card.",
   );
 }
 
@@ -101,24 +71,22 @@ async function setDeletedAt(
   deletedAt: string | null,
   failure: string,
 ): Promise<CardActionState> {
-  const userId = await ownerId();
+  const { userId } = await auth();
   const id = parseCardId(formData);
   if (!userId || id === null) {
     return { error: failure };
   }
+  return write(failure, (db) => db.setDeleted(userId, id, deletedAt));
+}
 
-  const supabase = createClient();
-  const { data, error } = await supabase
-    .from("cards")
-    .update({ deleted_at: deletedAt })
-    .eq("id", id)
-    .eq("user_id", userId)
-    .select("id");
-
-  if (error || !data?.length) {
+async function write(
+  failure: string,
+  change: (db: CardsDb) => Promise<boolean>,
+): Promise<CardActionState> {
+  const changed = await change(supabaseCardsDb()).catch(() => false);
+  if (!changed) {
     return { error: failure };
   }
-
   revalidatePath("/");
   return { ok: true };
 }

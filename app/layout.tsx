@@ -40,7 +40,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
                   <SignInButton>
                     <button
                       type="button"
-                      className="inline-flex h-10 items-center justify-center rounded-full border border-solid border-black/[.08] px-4 text-sm font-medium transition-colors hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a]"
+                      className="inline-flex h-10 items-center justify-center rounded-full border border-solid border-black/8 px-4 text-sm font-medium transition-colors hover:bg-black/4 dark:border-white/[.145] dark:hover:bg-[#1a1a1a]"
                     >
                       Sign in
                     </button>
