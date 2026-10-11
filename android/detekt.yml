@@ -1,0 +1,22 @@
+# Overrides on top of detekt's default rules (buildUponDefaultConfig).
+
+complexity:
+  LongMethod:
+    # A screen's layout reads top to bottom in one composable.
+    ignoreAnnotated: ['Composable']
+  TooManyFunctions:
+    # The view model exposes one function per user action.
+    allowedFunctionsPerClass: 15
+    ignorePrivate: true
+
+naming:
+  FunctionNaming:
+    # Composables are named like types.
+    ignoreAnnotated: ['Composable']
+
+style:
+  MagicNumber:
+    # Spacing, sizes and colors in layout code.
+    ignoreAnnotated: ['Composable']
+  ReturnCount:
+    excludeGuardClauses: true
